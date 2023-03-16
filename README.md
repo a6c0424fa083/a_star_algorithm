@@ -1,5 +1,5 @@
 # A\* Algorithm
-A C++ implementation of the __A\* Algorithm__
+A C++ implementation of the __A\* Algorithm__<br />
 
 ##Description
 As a school project I want to implement the common __A\* Algorithm__ in C++.
