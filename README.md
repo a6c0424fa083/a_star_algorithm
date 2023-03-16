@@ -1,2 +1,13 @@
-# a_star_algorithm
-A C++ implementation of the A* Algorithm
+# A* Algorithm
+A C++ implementation of the **A* Algorithm**
+
+##Description
+As a school project I want to implement the common **A* Algorithm** in C++.
+It will later be used to find the shortest path in images
+where white pixels represent "air" and black pixels represent obstacles.
+Various gray pixels are used to represent the start, end or the path.
+As it is a school project I should document my progress.
+
+##Note
+This is not a working project yet. There may be some errors and
+the code is not well commented right now.
