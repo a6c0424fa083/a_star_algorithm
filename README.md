@@ -1,8 +1,8 @@
 # A* Algorithm
-A C++ implementation of the **A* Algorithm**
+A C++ implementation of the __A* Algorithm__
 
 ##Description
-As a school project I want to implement the common **A* Algorithm** in C++.
+As a school project I want to implement the common __A* Algorithm__ in C++.
 It will later be used to find the shortest path in images
 where white pixels represent "air" and black pixels represent obstacles.
 Various gray pixels are used to represent the start, end or the path.
