@@ -1,14 +1,88 @@
-#ifndef A_STAR_ALGORITHM_MATRIX_H
-#define A_STAR_ALGORITHM_MATRIX_H
+#ifndef MATRIX_H
+#define MATRIX_H
 
 ///@brief:  basic includes
 #include <cstdint>
 #include <vector>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 ///@brief:  these values are used for calculating the distance between 2 coordinates
 #define diagonalValue 14142
 #define orthogonalValue 10000
+
+const uint8_t startNode = 4;
+const uint8_t endNode = 2;
+const uint8_t obstacleNode = 0;
+const uint8_t freeNode = 7;
+
+enum Status
+{
+    StartNode,
+    EndNode,
+    Obstacle,
+    Free,
+    Unknown
+};
+
+///@brief:  this function converts the numbers (0 to 9) from a char to a uint8_t form.
+///         should only be used by numbers from 0 to 9
+uint8_t char_to_num(char num)
+{
+    return num - 48;
+}
+
+///@brief:  these functions convert the numbers stored in the matrix to a char viewable in the terminal
+char num_to_viewable_char(uint8_t num)
+{
+    switch (num)
+    {
+        case 0:
+            return '.';
+        case 1:
+            return ':';
+        case 2:
+            return '-';
+        case 3:
+            return '=';
+        case 4:
+            return '*';
+        case 5:
+            return '#';
+        case 6:
+            return '%';
+        case 7:
+            return '@';
+        default:
+            return ' ';
+    }
+}
+
+char num_to_viewable_char_inverted(uint8_t num)
+{
+    switch (num)
+    {
+        case 0:
+            return '@';
+        case 1:
+            return '%';
+        case 2:
+            return '#';
+        case 3:
+            return '*';
+        case 4:
+            return '=';
+        case 5:
+            return '-';
+        case 6:
+            return ':';
+        case 7:
+            return '.';
+        default:
+            return ' ';
+    }
+}
 
 ///@brief:  this struct contains the basics functionality of a coordinate (x and y coordinate values)
 struct Coordinate
@@ -16,53 +90,24 @@ struct Coordinate
     Coordinate() = default;
 
     Coordinate(uint64_t X, uint64_t Y)
-            : X(X), Y(Y) {}
+        : X(X), Y(Y) {}
 
-    [[nodiscard("Class reference should be handled properly")]] Coordinate get_Coordinate() const
-    {
-        return *this;
-    }
-    void set_Coordinate(Coordinate *coordinate)
-    {
-        X = coordinate->X;
-        Y = coordinate->Y;
-    }
-    [[nodiscard]] bool is_initialized() const
-    {
-        if (X && Y)
-            return true;
-        else
-            return false;
-    }
+
 
     uint64_t X{};
     uint64_t Y{};
 };
 
-///@brief:  this struct represents a coordinate used in 'A* Algorithm'
-///         it contains additional variables such as the parent coordinate as well as the distance to certain coordinates
-struct A_Coordinate
+struct ASCoordinate // A-Star-Coordinate
 {
-    A_Coordinate() = delete;
+    ASCoordinate() = default;
+    ASCoordinate(Coordinate coordinate)
+        : coordinate(coordinate) {}
 
-    A_Coordinate(Coordinate coordinate, Coordinate start_coordinate, Coordinate end_coordinate)
-            : coordinate(coordinate), start_coordinate(start_coordinate), end_coordinate(end_coordinate) {}
-
-    A_Coordinate(uint64_t X, uint64_t Y, uint64_t start_X, uint64_t start_Y, uint64_t end_X, uint64_t end_Y)
-    {
-        coordinate.X = X;
-        coordinate.Y = Y;
-        start_coordinate.X = start_X;
-        start_coordinate.Y = start_Y;
-        end_coordinate.X = start_X;
-        end_coordinate.Y = start_Y;
-    }
 
     Coordinate coordinate;
-    Coordinate start_coordinate;
-    Coordinate end_coordinate;
-    Coordinate parent_Coordinate;
-    uint8_t status;
+    Coordinate parent_Node;
+    uint8_t status = Status::Unknown;
 };
 
 ///@brief: returns the distance between 2 Coordinated based in the value for orthogonal and diagonal movement
@@ -74,161 +119,214 @@ uint64_t distance_between_Coordinates(Coordinate c1, Coordinate c2)
            diagonalValue * horizontal_spacing + (vertical_spacing - horizontal_spacing) * orthogonalValue :
            diagonalValue * vertical_spacing + (horizontal_spacing - vertical_spacing) * orthogonalValue;
 }
-
-///@brief:  the conversion from a number to e.g. a start- or end-node is stored here
-struct Sign_Handler
+uint64_t distance_between_Coordinates(ASCoordinate c1, ASCoordinate c2)
 {
-    Sign_Handler() = delete;
-
-    Sign_Handler(uint8_t start_node, uint8_t end_node, uint8_t obstacle_node, uint8_t path_node, uint8_t clear_node)
-            : start_node(start_node), end_node(end_node), obstacle_node(obstacle_node), path_node(path_node), clear_node(clear_node) {}
-
-    uint8_t start_node;
-    uint8_t end_node;
-    uint8_t obstacle_node;
-    uint8_t path_node;
-    uint8_t clear_node;
-};
+    uint64_t horizontal_spacing = (c2.coordinate.Y - c1.coordinate.Y) >= 0 ? (c2.coordinate.Y - c1.coordinate.Y) : (c1.coordinate.Y - c2.coordinate.Y);
+    uint64_t vertical_spacing = (c2.coordinate.X - c1.coordinate.X) >= 0 ? (c2.coordinate.X - c1.coordinate.X) : (c1.coordinate.X - c2.coordinate.X);
+    return (horizontal_spacing < vertical_spacing) ?
+           diagonalValue * horizontal_spacing + (vertical_spacing - horizontal_spacing) * orthogonalValue :
+           diagonalValue * vertical_spacing + (horizontal_spacing - vertical_spacing) * orthogonalValue;
+}
 
 ///@brief:  this struct contains basic
 class Grid
 {
 public:
-    Grid()
-            : sign_Handler(Sign_Handler(1, 3, 7, 2, 0)) {}
+    Grid() = default;
 
-    Grid(std::vector<std::vector<uint8_t>> grid, Sign_Handler sign_Handler)
-            : grid(grid), sign_Handler(sign_Handler), grid_height(grid.size()), grid_width(grid.at(0).size()) {}
-
-    void init(std::vector<std::vector<uint8_t>> i_grid, Sign_Handler i_sign_Handler = Sign_Handler(1, 3, 7, 2, 0))
+    Grid(std::string file_path)
     {
-        grid = i_grid;
-        sign_Handler = i_sign_Handler;
-        grid_height = grid.size();
-        grid_width = grid.at(0).size();
+        std::ifstream image;
+
+        image.open(file_path, std::ios::in | std::ios::binary);
+
+        if (image.is_open())
+        {
+            std::string line;
+            uint64_t line_count = 1;
+
+            std::getline(image, line);
+            if (line == "P2")
+            {
+                image_format = 2;
+            }
+            else if (line == "P3")
+            {
+                image_format = 3;
+            }
+            else
+            {
+                throw std::invalid_argument("Invalid Format");
+            }
+
+            std::stringstream conversion;
+
+            line_count++;
+            std::getline(image, line);
+            conversion << line;
+            conversion >> grid_width;
+
+            conversion.clear();
+
+            line_count++;
+            std::getline(image, line);
+            conversion << line;
+            conversion >> grid_height;
+
+            line_count++;
+            std::getline(image, line);
+            if (line != "7")
+            {
+                throw std::invalid_argument("Invalid color depth");
+            }
+
+            line_count++;
+            std::getline(image, line);
+            if (!line.empty())
+            {
+                throw std::invalid_argument("Expected empty line between color depth and pixel values");
+            }
+
+            if (image_format == 2)
+            {
+                while (!image.eof())
+                {
+                    std::getline(image, line);
+                    if (!line.empty())
+                    {
+                        line_count++;
+
+                        grid.push_back(ASCoordinate(Coordinate((line_count - 6) % grid_width, (uint64_t)(line_count / grid_height))));
+                        switch (char_to_num(line[0]))
+                        {
+                            case obstacleNode:
+                                grid.back().status = Status::Obstacle;
+                                obstacles.push_back(grid.back());
+                                break;
+                            case endNode:
+                                grid.back().status = Status::EndNode;
+                                end_node = grid.back();
+                                break;
+                            case startNode:
+                                grid.back().status = Status::StartNode;
+                                start_node = grid.back();
+                                break;
+                            case freeNode:
+                                grid.back().status = Status::Free;
+                                break;
+                        }
+                    }
+                }
+            }
+            else if (image_format == 3)
+            {
+                while (!image.eof())
+                {
+                    std::getline(image, line);
+                    if ((line_count - 6) % 3 == 0)
+                    {
+                        if (!line.empty())
+                        {
+                            line_count++;
+
+                            grid.push_back(ASCoordinate(Coordinate((line_count - 6) % grid_width, (uint64_t)(line_count / grid_height))));
+                            switch (char_to_num(line[0]))
+                            {
+                                case obstacleNode:
+                                    grid.back().status = Status::Obstacle;
+                                    obstacles.push_back(grid.back());
+                                    break;
+                                case endNode:
+                                    grid.back().status = Status::EndNode;
+                                    end_node = grid.back();
+                                    break;
+                                case startNode:
+                                    grid.back().status = Status::StartNode;
+                                    start_node = grid.back();
+                                    break;
+                                case freeNode:
+                                    grid.back().status = Status::Free;
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+            image.close();
+        }
+        else
+        {
+            throw std::invalid_argument("Cannot open file");
+        }
+    }
+
+    ///@brief:  this function converts the matrix back to pixels with various brightness based on the input vector
+    void show_grid_output(const std::string spacing = " ", bool inverted = false)
+    {
+        std::string output;
+
+        for (uint64_t i = 0; i < grid_height; i++)
+        {
+            output = "";
+            for (uint64_t j = 0; j < grid_width; j++)
+            {
+                if (!inverted)
+                    output += num_to_viewable_char(grid.at((i * grid_width) + j).status);
+                else
+                    output += num_to_viewable_char_inverted(grid.at((i * grid_width) + j).status);
+
+                output += spacing;
+            }
+            std::cout << output << std::endl;
+        }
     }
 
     void find_shortest_path()
     {
-        set_internal_information_from_grid();
-        convert_from_uint8t_to_ACoordinate();
+
     }
 
-private:
-    ///@brief:  this function sets the internal values that are necessary for further computation
-    ///         e.g. start- or end-node as well as all the obstacle-nodes
-    void set_internal_information_from_grid()
-    {
-        for (uint64_t i = 0; i < grid.size(); i++)
-        {
-            for (uint64_t j = 0; j < grid.at(0).size(); j++)
-            {
-                if (grid.at(i).at(j) == sign_Handler.start_node)
-                    start_node = Coordinate(i, j);
-
-                else if (grid.at(i).at(j) == sign_Handler.end_node)
-                    end_node = Coordinate(i, j);
-
-                else if (grid.at(i).at(j) == sign_Handler.obstacle_node)
-                    obstacles.push_back(Coordinate(i, j));
-            }
-        }
-    }
-    ///@brief:  create a 2-dimensional grid of 'A_Coordinate' in order to archive more complex operations
-    void convert_from_uint8t_to_ACoordinate()
-    {
-        std::vector<A_Coordinate> local_coordinate_line;
-        for (uint64_t i = 0; i < grid.size(); i++)
-        {
-            for (uint64_t j = 0; j < grid.size(); j++)
-            {
-                local_coordinate_line.push_back(A_Coordinate(i, j, start_node.X, start_node.Y, end_node.X, end_node.Y));
-            }
-            coordinate_grid.push_back(local_coordinate_line);
-            local_coordinate_line.clear();
-        }
-
-        for (uint64_t i = 0; i < grid.size(); i++)
-        {
-            for (uint64_t j = 0; j < grid.size(); j++)
-            {
-                if (grid.at(i).at(j) == sign_Handler.start_node)
-                    coordinate_grid.at(i).at(j).status = sign_Handler.start_node;
-
-                else if (grid.at(i).at(j) == sign_Handler.end_node)
-                    coordinate_grid.at(i).at(j).status = sign_Handler.end_node;
-
-                else if (grid.at(i).at(j) == sign_Handler.obstacle_node)
-                    coordinate_grid.at(i).at(j).status = sign_Handler.obstacle_node;
-
-                else
-                    coordinate_grid.at(i).at(j).status = sign_Handler.clear_node;
-            }
-        }
-    }
-
-public:
     ///@brief:  get all valid nodes surrounding a given node
-    std::vector<Coordinate> get_valid_daughter_nodes_coordinates(A_Coordinate coordinate)
+    void add_daughter_node_to_open_nodes(ASCoordinate coordinate)
     {
-        bool left_side_touching = false;
-        bool right_side_touching = false;
-        bool upper_side_touching = false;
-        bool lower_side_touching = false;
-        std::vector<Coordinate> coordinates;
+        if (coordinate.coordinate.Y != 0)
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y - 1)));
 
-        if (coordinate.coordinate.X == 0)
-            left_side_touching = true;
+        if (coordinate.coordinate.X != 0)
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y)));
 
-        if (coordinate.coordinate.X == grid_width - 1)
-            right_side_touching = true;
+        if (coordinate.coordinate.X != grid_width - 1)
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y)));
 
-        if (coordinate.coordinate.Y == 0)
-            upper_side_touching = true;
-
-        if (coordinate.coordinate.Y == grid_height - 1)
-            lower_side_touching = true;
-
-        if (!upper_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y - 1));
-
-        if (!left_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y));
-
-        if (!right_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y));
-
-        if (!lower_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y + 1));
+        if (coordinate.coordinate.Y != grid_height - 1)
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y + 1)));
 
 
-        if (!upper_side_touching && !left_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y - 1));
+        if ((coordinate.coordinate.Y != 0) && (coordinate.coordinate.X != 0))
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y - 1)));
 
-        if (!upper_side_touching && !right_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y - 1));
+        if ((coordinate.coordinate.Y != 0) && (coordinate.coordinate.X != grid_width - 1))
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y - 1)));
 
-        if (!lower_side_touching && !left_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y + 1));
+        if ((coordinate.coordinate.Y != grid_height - 1) && (coordinate.coordinate.X != 0))
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y + 1)));
 
-        if (!lower_side_touching && !right_side_touching)
-            coordinates.push_back(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y + 1));
+        if ((coordinate.coordinate.Y != grid_height - 1) && (coordinate.coordinate.X != grid_width - 1))
+            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y + 1)));
 
-        return coordinates;
     }
 
 public:
-    std::vector<std::vector<uint8_t>> grid;
-    std::vector<std::vector<A_Coordinate>> coordinate_grid;
-    Sign_Handler sign_Handler;
-    std::vector<Coordinate> obstacles;
-    std::vector<A_Coordinate> closed_nodes;
-    std::vector<A_Coordinate> open_nodes;
-    Coordinate start_node;
-    Coordinate end_node;
+    std::vector<ASCoordinate> grid;
+    std::vector<ASCoordinate> obstacles;
+    ASCoordinate start_node;
+    ASCoordinate end_node;
+    std::vector<ASCoordinate> open_nodes;
+    std::vector<ASCoordinate> closed_nodes;
     uint64_t grid_height;
     uint64_t grid_width;
+    uint8_t image_format;
 
 };
 
-#endif //A_STAR_ALGORITHM_MATRIX_H
+#endif //MATRIX_H
