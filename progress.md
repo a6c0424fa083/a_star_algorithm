@@ -10,3 +10,8 @@
 |23. February - <br /> 02. March|Efficiency improvement and code commenting|
 |02. March - <br /> 09. March|Focus on SIA Presentation|
 |09. March - <br /> 16. March|Focus on written elaboration for SIA|
+|16. March - <br /> 23. March|Focus on written elaboration for SIA|
+|23. March - <br /> 30. March|Focus on programming for SIA|
+|30. March - <br /> 06. April|Focus on programming for SIA|
+|06. April - <br /> 13. April|Focus on programming for SIA|
+|13. April - <br /> 20. April|Cleaned up prject and merged Header files; Improved efficiency|
