@@ -7,6 +7,9 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 
 ///@brief:  these values are used for calculating the distance between 2 coordinates
 #define diagonalValue 14142
@@ -23,6 +26,7 @@ enum Status
     EndNode,
     Obstacle,
     Free,
+    Path,
     Unknown
 };
 
@@ -89,13 +93,13 @@ struct Coordinate
 {
     Coordinate() = default;
 
-    Coordinate(uint64_t X, uint64_t Y)
-        : X(X), Y(Y) {}
+    Coordinate(uint64_t row, uint64_t column)
+        : row(row), column(column) {}
 
 
 
-    uint64_t X{};
-    uint64_t Y{};
+    uint64_t column{};
+    uint64_t row{};
 };
 
 struct ASCoordinate // A-Star-Coordinate
@@ -108,21 +112,30 @@ struct ASCoordinate // A-Star-Coordinate
     Coordinate coordinate;
     Coordinate parent_Node;
     uint8_t status = Status::Unknown;
+    uint64_t distance_to_start_node;
+    uint64_t distance_to_end_node;
+    bool on_closed_list = false;
+    bool on_open_list = false;
 };
+
+uint64_t difference(int64_t value)
+{
+    return value < 0 ? -value : value;
+}
 
 ///@brief: returns the distance between 2 Coordinated based in the value for orthogonal and diagonal movement
 uint64_t distance_between_Coordinates(Coordinate c1, Coordinate c2)
 {
-    uint64_t horizontal_spacing = (c2.Y - c1.Y) >= 0 ? (c2.Y - c1.Y) : (c1.Y - c2.Y);
-    uint64_t vertical_spacing = (c2.X - c1.X) >= 0 ? (c2.X - c1.X) : (c1.X - c2.X);
+    uint64_t horizontal_spacing = difference(c2.column - c1.column);
+    uint64_t vertical_spacing = difference(c2.row - c1.row);
     return (horizontal_spacing < vertical_spacing) ?
            diagonalValue * horizontal_spacing + (vertical_spacing - horizontal_spacing) * orthogonalValue :
            diagonalValue * vertical_spacing + (horizontal_spacing - vertical_spacing) * orthogonalValue;
 }
 uint64_t distance_between_Coordinates(ASCoordinate c1, ASCoordinate c2)
 {
-    uint64_t horizontal_spacing = (c2.coordinate.Y - c1.coordinate.Y) >= 0 ? (c2.coordinate.Y - c1.coordinate.Y) : (c1.coordinate.Y - c2.coordinate.Y);
-    uint64_t vertical_spacing = (c2.coordinate.X - c1.coordinate.X) >= 0 ? (c2.coordinate.X - c1.coordinate.X) : (c1.coordinate.X - c2.coordinate.X);
+    uint64_t horizontal_spacing = difference(c2.coordinate.column - c1.coordinate.column);
+    uint64_t vertical_spacing = difference(c2.coordinate.row - c1.coordinate.row);
     return (horizontal_spacing < vertical_spacing) ?
            diagonalValue * horizontal_spacing + (vertical_spacing - horizontal_spacing) * orthogonalValue :
            diagonalValue * vertical_spacing + (horizontal_spacing - vertical_spacing) * orthogonalValue;
@@ -196,20 +209,20 @@ public:
                     {
                         line_count++;
 
-                        grid.push_back(ASCoordinate(Coordinate((line_count - 6) % grid_width, (uint64_t)(line_count / grid_height))));
+                        grid.push_back(ASCoordinate(Coordinate( (uint64_t)((line_count - 6) / grid_width), (line_count - 6) % grid_width)));
                         switch (char_to_num(line[0]))
                         {
                             case obstacleNode:
                                 grid.back().status = Status::Obstacle;
-                                obstacles.push_back(grid.back());
+                                obstacles.push_back(&grid.back());
                                 break;
                             case endNode:
                                 grid.back().status = Status::EndNode;
-                                end_node = grid.back();
+                                end_node = &grid.back();
                                 break;
                             case startNode:
                                 grid.back().status = Status::StartNode;
-                                start_node = grid.back();
+                                start_node = &grid.back();
                                 break;
                             case freeNode:
                                 grid.back().status = Status::Free;
@@ -234,15 +247,15 @@ public:
                             {
                                 case obstacleNode:
                                     grid.back().status = Status::Obstacle;
-                                    obstacles.push_back(grid.back());
+                                    //obstacles.push_back(&grid.back());
                                     break;
                                 case endNode:
                                     grid.back().status = Status::EndNode;
-                                    end_node = grid.back();
+                                    //end_node = &grid.back();
                                     break;
                                 case startNode:
                                     grid.back().status = Status::StartNode;
-                                    start_node = grid.back();
+                                    //start_node = &grid.back();
                                     break;
                                 case freeNode:
                                     grid.back().status = Status::Free;
@@ -253,6 +266,32 @@ public:
                 }
             }
             image.close();
+
+            for (ASCoordinate &node : grid)
+            {
+                switch (node.status) {
+                    case Status::Obstacle:
+                        obstacles.push_back(&node);
+                        break;
+                    case Status::StartNode:
+                        start_node = &node;
+                        start_node->on_closed_list = true;
+                        closed_nodes.push_back(start_node);
+                        break;
+                    case Status::EndNode:
+                        end_node = &node;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            /*
+            start_node->distance_to_start_node = 0;
+            end_node->distance_to_end_node = 0;
+            start_node->distance_to_end_node = distance_between_Coordinates(*start_node, *end_node);
+            end_node->distance_to_start_node = distance_between_Coordinates(*start_node, *end_node);
+            start_node->on_closed_list = true;
+            closed_nodes.push_back(start_node);*/
         }
         else
         {
@@ -281,51 +320,137 @@ public:
         }
     }
 
-    void find_shortest_path()
+    ///@brief:  get all valid nodes surrounding a given node
+    void add_daughter_nodes_to_list(ASCoordinate coordinate, std::vector<Coordinate> &list)
     {
+        //std::vector<Coordinate> coordinates;
 
+        if (coordinate.coordinate.column > 0)
+            list.push_back(Coordinate(coordinate.coordinate.row, coordinate.coordinate.column - 1));
+
+        if (coordinate.coordinate.row > 0)
+            list.push_back(Coordinate(coordinate.coordinate.row - 1, coordinate.coordinate.column));
+
+        if (coordinate.coordinate.row < grid_width - 1)
+            list.push_back(Coordinate(coordinate.coordinate.row + 1, coordinate.coordinate.column));
+
+        if (coordinate.coordinate.column < grid_height - 1)
+            list.push_back(Coordinate(coordinate.coordinate.row, coordinate.coordinate.column + 1));
+
+
+        if ((coordinate.coordinate.column > 0) && (coordinate.coordinate.row > 0))
+            list.push_back(Coordinate(coordinate.coordinate.row - 1, coordinate.coordinate.column - 1));
+
+        if ((coordinate.coordinate.column > 0) && (coordinate.coordinate.row < grid_width - 1))
+            list.push_back(Coordinate(coordinate.coordinate.row + 1, coordinate.coordinate.column - 1));
+
+        if ((coordinate.coordinate.column < grid_height - 1) && (coordinate.coordinate.row > 0))
+            list.push_back(Coordinate(coordinate.coordinate.row - 1, coordinate.coordinate.column + 1));
+
+        if ((coordinate.coordinate.column < grid_height - 1) && (coordinate.coordinate.row < grid_width - 1))
+            list.push_back(Coordinate(coordinate.coordinate.row + 1, coordinate.coordinate.column + 1));
     }
 
     ///@brief:  get all valid nodes surrounding a given node
-    void add_daughter_node_to_open_nodes(ASCoordinate coordinate)
+    void add_daughter_nodes_to_list(ASCoordinate coordinate, std::vector<ASCoordinate *> &list)
     {
-        if (coordinate.coordinate.Y != 0)
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y - 1)));
+        //std::vector<Coordinate> coordinates;
 
-        if (coordinate.coordinate.X != 0)
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y)));
+        if (coordinate.coordinate.column > 0)
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row + coordinate.coordinate.column - 1));
 
-        if (coordinate.coordinate.X != grid_width - 1)
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y)));
+        if (coordinate.coordinate.row > 0)
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row - 1 + coordinate.coordinate.column));
 
-        if (coordinate.coordinate.Y != grid_height - 1)
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X, coordinate.coordinate.Y + 1)));
+        if (coordinate.coordinate.row < grid_width - 1)
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row + 1 + coordinate.coordinate.column));
+
+        if (coordinate.coordinate.column < grid_height - 1)
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row + coordinate.coordinate.column + 1));
 
 
-        if ((coordinate.coordinate.Y != 0) && (coordinate.coordinate.X != 0))
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y - 1)));
+        if ((coordinate.coordinate.column > 0) && (coordinate.coordinate.row > 0))
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row - 1 + coordinate.coordinate.column - 1));
 
-        if ((coordinate.coordinate.Y != 0) && (coordinate.coordinate.X != grid_width - 1))
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y - 1)));
+        if ((coordinate.coordinate.column > 0) && (coordinate.coordinate.row < grid_width - 1))
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row + 1 + coordinate.coordinate.column - 1));
 
-        if ((coordinate.coordinate.Y != grid_height - 1) && (coordinate.coordinate.X != 0))
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X - 1, coordinate.coordinate.Y + 1)));
+        if ((coordinate.coordinate.column < grid_height - 1) && (coordinate.coordinate.row > 0))
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row - 1 + coordinate.coordinate.column + 1));
 
-        if ((coordinate.coordinate.Y != grid_height - 1) && (coordinate.coordinate.X != grid_width - 1))
-            open_nodes.push_back(ASCoordinate(Coordinate(coordinate.coordinate.X + 1, coordinate.coordinate.Y + 1)));
+        if ((coordinate.coordinate.column < grid_height - 1) && (coordinate.coordinate.row < grid_width - 1))
+            list.push_back(&grid.at(grid_width * coordinate.coordinate.row + 1 + coordinate.coordinate.column + 1));
+    }
 
+    void calculate_distances_to_start_node_from_open_nodes_list()
+    {
+        //std::cout << "Start calculating distances" << std::endl;
+        std::vector<uint64_t> distances;
+        std::vector<Coordinate> daughter_nodes;
+        uint64_t index_of_smallest_element;
+        for (ASCoordinate *node : open_nodes)
+        {
+            //std::cout << "Entered node" << std::endl;
+            daughter_nodes.clear();
+            distances.clear();
+
+            add_daughter_nodes_to_list(*node, daughter_nodes);
+
+            for (Coordinate &daughter_node : daughter_nodes)
+            {
+                if (grid.at(grid_width * daughter_node.row + daughter_node.column).on_closed_list) // daughter_node.on_closed_list // pointer for references
+                    distances.push_back(grid.at(grid_width * daughter_node.row + daughter_node.column).distance_to_start_node + distance_between_Coordinates(daughter_node, node->coordinate));
+            }
+            index_of_smallest_element = std::distance(std::begin(distances), std::min_element(std::begin(distances), std::end(distances)));
+            node->parent_Node = Coordinate(grid.at(grid_width * daughter_nodes.at(index_of_smallest_element).row + daughter_nodes.at(index_of_smallest_element).column).coordinate);
+            node->distance_to_start_node = distances.at(index_of_smallest_element);
+            node->distance_to_end_node = distance_between_Coordinates(*node, *end_node);
+        }
+        //std::cout << "Calculated distances" << std::endl;
+    }
+
+    void find_shortest_path()
+    {
+        found_path = false;
+        path_nodes.clear();
+        std::vector<uint64_t> distances;
+        uint64_t index_of_smallest_element;
+
+        path_nodes.push_back(start_node);
+
+        add_daughter_nodes_to_list(*start_node, open_nodes);
+
+        for(uint64_t counter = 0;!found_path; counter++)
+        {
+            std::cout << "Round: " << counter << std::endl;
+            calculate_distances_to_start_node_from_open_nodes_list();
+            distances.clear();
+
+            for (ASCoordinate *node : open_nodes)
+            {
+                distances.push_back(node->distance_to_start_node + node->distance_to_end_node);
+            }
+            index_of_smallest_element = std::distance(std::begin(distances), std::min_element(std::begin(distances), std::end(distances)));
+            /// Add extended feature in future! Situation: many elements with the same minimal value
+            open_nodes.at(index_of_smallest_element)->on_closed_list = true;
+            path_nodes.push_back(open_nodes.at(index_of_smallest_element));
+            if (path_nodes.back()->distance_to_end_node < 2 * orthogonalValue)
+                found_path = true;
+        }
     }
 
 public:
     std::vector<ASCoordinate> grid;
-    std::vector<ASCoordinate> obstacles;
-    ASCoordinate start_node;
-    ASCoordinate end_node;
-    std::vector<ASCoordinate> open_nodes;
-    std::vector<ASCoordinate> closed_nodes;
+    std::vector<ASCoordinate *> obstacles;
+    ASCoordinate *start_node;
+    ASCoordinate *end_node;
+    std::vector<ASCoordinate *> open_nodes;
+    std::vector<ASCoordinate *> closed_nodes;
     uint64_t grid_height;
     uint64_t grid_width;
     uint8_t image_format;
+    bool found_path;
+    std::vector<ASCoordinate *> path_nodes;
 
 };
 
