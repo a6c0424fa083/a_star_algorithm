@@ -15,3 +15,5 @@
 |30. March - <br /> 06. April|Focus on programming for SIA|
 |06. April - <br /> 13. April|Focus on programming for SIA|
 |13. April - <br /> 20. April|Cleaned up prject and merged Header files; Improved efficiency|
+|20. April - <br /> 22. June|Focus on SIA|
+|22. June - <br /> 29. June|Redesigned the Code structure|
