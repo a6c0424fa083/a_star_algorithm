@@ -18,7 +18,7 @@
 // LOG::WRITE_LOG_INIT();
 // atexit(LOG::EXIT_FUNCTION);
 
-// 'defines.h' must be the first own include
+// 'defines.h' should be the first own include in order to use it in other headers
 #include "defines.h"
 
 #include "Grid.h"
