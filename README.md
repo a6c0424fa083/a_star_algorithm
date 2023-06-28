@@ -12,5 +12,5 @@ As it is a school project I should document my progress.<br />
 
 ## Note
 
-This is not a working project yet. There may be some errors and<br />
-the code is not well commented right now.<br />
+This is not a finished project yet. There may be some errors and<br />
+the code is neither well commented nor wrote efficient right now.<br />
